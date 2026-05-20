@@ -92,7 +92,7 @@ services:
     image: ${DOCKERHUB_REPO:-local}/pji-backend:${IMAGE_TAG:-latest}
     container_name: pji-backend
     restart: unless-stopped
-    # Port 8085 expose nội bộ, Caddy proxy vào
+    # Port expose nội bộ, proxy vào
     expose:
       - "8085"
     environment:
@@ -129,6 +129,9 @@ services:
       # Internal AI service URL
       AI_SERVICE_URL: http://pji-rag-service:8000
       AI_SERVICE_API_KEY: ${AI_SERVICE_API_KEY:?AI service API key required}
+
+      # Extract Images service — reachable on the Docker network at pji-extract-api:8000
+      EXTRACT_IMAGES_URL: http://pji-extract-api:8000
 
       # SMTP for password recovery OTP email (MAIL_HOST binds to spring.mail.host)
       MAIL_HOST: ${MAIL_HOST:?SMTP host required}
@@ -309,42 +312,7 @@ services:
   # VOICE INTERACTION — DISABLED for this deployment.
   # Re-enable by uncommenting and adding build/push stages in Jenkinsfile.
   # =============================================================================
-  # pji-voice-gateway:
-  #   image: ${DOCKERHUB_REPO:-local}/pji-voice-gateway:${IMAGE_TAG:-latest}
-  #   container_name: pji-voice-gateway
-  #   restart: unless-stopped
-  #   expose:
-  #     - "8000"
-  #   environment:
-  #     ASR_API_KEY: ${ASR_API_KEY:?ASR API key required}
-  #     TTS_API_KEY: ${TTS_API_KEY:?TTS API key required}
-  #     OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
-  #     OTEL_SERVICE_NAME: pji-voice-gateway
-  #   depends_on:
-  #     - pji-voice-orchestrator
-  #   networks:
-  #     - backend-net
-  #     - rag-net
-  #     - monitoring-net
-  #
-  # pji-voice-orchestrator:
-  #   image: ${DOCKERHUB_REPO:-local}/pji-voice-orchestrator:${IMAGE_TAG:-latest}
-  #   container_name: pji-voice-orchestrator
-  #   restart: unless-stopped
-  #   expose:
-  #     - "8001"
-  #   environment:
-  #     ASR_API_KEY: ${ASR_API_KEY:?ASR API key required}
-  #     TTS_API_KEY: ${TTS_API_KEY:?TTS API key required}
-  #     CHATBOT_API_KEY: ${CHATBOT_API_KEY:?Chatbot API key required}
-  #     CHATBOT_BASE_URL: ${CHATBOT_BASE_URL:-https://openrouter.ai/api/v1}
-  #     CHATBOT_MODEL: ${CHATBOT_MODEL:-google/gemini-2.0-flash-001}
-  #     OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
-  #     OTEL_SERVICE_NAME: pji-voice-orchestrator
-  #   networks:
-  #     - backend-net
-  #     - rag-net
-  #     - monitoring-net
+  
 
   # DATABASE - PostgreSQL
   postgres:
@@ -383,6 +351,29 @@ services:
         -c max_connections=100
         -c log_min_duration_statement=1000
 
+  postgres-backup:
+    image: prodrigestivill/postgres-backup-local:16
+    container_name: pji-postgres-backup
+    restart: unless-stopped
+    user: postgres
+    volumes:
+      - ./backups:/backups
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-pji_dev}
+      POSTGRES_USER: ${POSTGRES_USER:-user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Postgres password required}
+      POSTGRES_EXTRA_OPTS: "--no-owner --no-acl --quote-all-identifiers"
+      SCHEDULE: "@daily" # runs at 04:00 UTC daily
+      BACKUP_KEEP_DAYS: "7"
+      BACKUP_KEEP_WEEKS: "4"
+      BACKUP_KEEP_MONTHS: "6"
+      HEALTHCHECK_PORT: "8080"
+    networks:
+        - backend-net
+    depends_on:
+      postgres:
+      condition: service_healthy
   # CACHE - Redis
   redis:
     image: redis:7-alpine

@@ -324,6 +324,7 @@ pipeline {
 
                     mkdir -p "${DEPLOY_PATH}/docker/signoz"
                     mkdir -p "${DEPLOY_PATH}/docker/init-db"
+                    mkdir -p "${DEPLOY_PATH}/backups"   # postgres-backup-local writes here
                     # Production uses a tunnel-mode Caddyfile (HTTP-only on :80, no Let's Encrypt).
                     # NOTE: Infras_Devops content lives at the workspace root after `checkout scm`,
                     # so paths are NOT prefixed with Infras_Devops/.

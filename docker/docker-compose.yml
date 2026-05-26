@@ -220,6 +220,11 @@ services:
       # RabbitMQ tuning
       RABBITMQ_PREFETCH_COUNT: ${RABBITMQ_PREFETCH_COUNT:-1}
 
+      # Redis — shared with pji-backend for run-cancellation signaling.
+      # Worker polls `cancel:run:<id>` between agent steps and aborts on hit.
+      REDIS_URL: redis://:${REDIS_PASSWORD:?Redis password required}@redis:6379/0
+      CANCEL_KEY_PREFIX: "cancel:run:"
+
       # OpenTelemetry
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_SERVICE_NAME: pji-rag-service
@@ -232,6 +237,8 @@ services:
       - monitoring-net
     depends_on:
       rabbitmq:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" ]
@@ -370,10 +377,10 @@ services:
       BACKUP_KEEP_MONTHS: "6"
       HEALTHCHECK_PORT: "8080"
     networks:
-        - backend-net
+      - backend-net
     depends_on:
       postgres:
-      condition: service_healthy
+        condition: service_healthy
   # CACHE - Redis
   redis:
     image: redis:7-alpine

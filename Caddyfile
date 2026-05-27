@@ -55,6 +55,25 @@
 	}
 
 	# --------
+	# SSE streaming endpoints → Spring Boot, with buffering + timeouts disabled.
+	# Must come BEFORE the generic /api/* handle so it wins. `flush_interval -1`
+	# forwards each event immediately; read_timeout 0 keeps long-idle streams
+	# (thought-logs, notifications) alive instead of being cut at 120s.
+	@sse path /api/v1/ai-recommendations/runs/*/stream /api/v1/notifications/stream
+	handle @sse {
+		reverse_proxy pji-backend:8085 {
+			flush_interval -1
+			transport http {
+				dial_timeout            5s
+				response_header_timeout 0
+				read_timeout            0
+			}
+			header_up X-Real-IP          {remote_host}
+			header_up X-Forwarded-For    {remote_host}
+			header_up X-Forwarded-Proto  {scheme}
+		}
+	}
+
 	# API Backend: /api/* → Spring Boot (port 8085)
 
 	handle /api/* {

@@ -40,6 +40,27 @@
 		level INFO
 	}
 
+	# SSE streaming endpoints (thought-logs, notifications). Must precede the
+	# generic /api/* handle. flush_interval -1 disables Caddy response buffering
+	# so each event is forwarded the instant it arrives; read_timeout 0 stops
+	# Caddy cutting a stream that idles between events. (Cloudflare forwards SSE
+	# fine once the origin streams unbuffered with text/event-stream.)
+	@sse path /api/v1/ai-recommendations/runs/*/stream /api/v1/notifications/stream
+	handle @sse {
+		reverse_proxy pji-backend:8085 {
+			flush_interval -1
+			transport http {
+				dial_timeout            5s
+				response_header_timeout 0
+				read_timeout            0
+			}
+			header_up X-Real-IP          {http.request.header.CF-Connecting-IP}
+			header_up X-Forwarded-For    {http.request.header.CF-Connecting-IP}
+			header_up X-Forwarded-Proto  https
+			header_up X-Forwarded-Host   {host}
+		}
+	}
+
 	# API: /api/* → Spring Boot
 	handle /api/* {
 		reverse_proxy pji-backend:8085 {

@@ -268,8 +268,16 @@ services:
       RABBITMQ_USER: ${RABBITMQ_USER:-pji_user}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RabbitMQ password required}
       RABBITMQ_QUEUE: ${EXTRACT_QUEUE:-image_processing}
+      # Uploads + outputs MUST live on a volume shared with the worker. The API
+      # writes uploaded images here and passes the path over RabbitMQ; the worker
+      # reads them back and writes status/result JSON the API later polls.
+      # Without this the default resolves under site-packages, per-container.
+      UPLOAD_DIR: /data/uploads
+      OUTPUTS_DIR: /data/outputs
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_SERVICE_NAME: pji-extract-api
+    volumes:
+      - extract_data:/data
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -300,8 +308,13 @@ services:
       RABBITMQ_USER: ${RABBITMQ_USER:-pji_user}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?RabbitMQ password required}
       RABBITMQ_QUEUE: ${EXTRACT_QUEUE:-image_processing}
+      # Same shared paths as pji-extract-api — see the note there.
+      UPLOAD_DIR: /data/uploads
+      OUTPUTS_DIR: /data/outputs
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_SERVICE_NAME: pji-extract-worker
+    volumes:
+      - extract_data:/data
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -362,7 +375,10 @@ services:
     image: prodrigestivill/postgres-backup-local:16
     container_name: pji-postgres-backup
     restart: unless-stopped
-    user: postgres
+    # Run as root (the image's default). Docker auto-creates the ./backups
+    # bind-mount as root:root, so a non-root `user: postgres` can't write to
+    # /backups → "BACKUP_DIR ... insufficient permissions". pg_dump connects to
+    # postgres over TCP, so the container user is irrelevant to the dump itself.
     volumes:
       - ./backups:/backups
     environment:
@@ -650,6 +666,7 @@ volumes:
   rabbitmq_data:
   minio_data:
   rag_data:
+  extract_data: # shared uploads/outputs between pji-extract-api and pji-extract-worker
   signoz_zookeeper_data:
   signoz_clickhouse_data:
   signoz_alertmanager_data:

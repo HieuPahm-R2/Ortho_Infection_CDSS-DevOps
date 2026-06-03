@@ -438,6 +438,7 @@ services:
     networks:
       - backend-net
       - rag-net
+      - monitoring-net # expose :15692 prometheus metrics to the otel-collector
     healthcheck:
       test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
       interval: 15s
@@ -472,6 +473,36 @@ services:
         limits:
           memory: 512M
           cpus: '1.0'
+
+  # METRICS EXPORTER - PostgreSQL → scraped by otel-collector (SigNoz)
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: pji-postgres-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-pji_user}:${POSTGRES_PASSWORD:?Postgres password required}@postgres:5432/${POSTGRES_DB:-pji_advisor}?sslmode=disable"
+    networks:
+      - backend-net # reach postgres
+      - monitoring-net # scraped by otel-collector
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # METRICS EXPORTER - Redis → scraped by otel-collector (SigNoz)
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.62.0-alpine
+    container_name: pji-redis-exporter
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: "redis://redis:6379"
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Redis password required}
+    networks:
+      - backend-net # reach redis
+      - monitoring-net # scraped by otel-collector
+    depends_on:
+      redis:
+        condition: service_healthy
+
   # =============================================================================
   # OBSERVABILITY - SigNoz (All-in-One: replaces Prometheus / Loki / Grafana / Jaeger)
   # =============================================================================

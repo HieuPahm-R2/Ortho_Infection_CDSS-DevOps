@@ -16,6 +16,11 @@ receivers:
       - type: filter
         id: signoz_logs_filter
         expr: 'attributes.container_name matches "^signoz-(logspout|frontend|alertmanager|query-service|otel-collector|clickhouse|zookeeper)"'
+      # Map the Docker container name onto resource service.name so SigNoz Logs
+      # shows a service per container (pji-backend, pji-rag-service, ...) instead of blank.
+      - type: copy
+        from: attributes.container_name
+        to: resource["service.name"]
   opencensus:
     endpoint: 0.0.0.0:55678
   otlp:
@@ -56,6 +61,22 @@ receivers:
               - localhost:8888
             labels:
               job_name: otel-collector
+        # Infrastructure metrics (stateful services on the recommendation path).
+        # Exporters are reachable on monitoring-net; rabbitmq exposes its built-in
+        # prometheus plugin on :15692.
+        - job_name: postgres
+          static_configs:
+          - targets: ['postgres-exporter:9187']
+            labels: { service_name: postgres }
+        - job_name: redis
+          static_configs:
+          - targets: ['redis-exporter:9121']
+            labels: { service_name: redis }
+        - job_name: rabbitmq
+          metrics_path: /metrics
+          static_configs:
+          - targets: ['rabbitmq:15692']
+            labels: { service_name: rabbitmq }
 
 processors:
   batch:

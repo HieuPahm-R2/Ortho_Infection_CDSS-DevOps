@@ -93,6 +93,8 @@ pipeline {
                     # Infras_Devops content lives at workspace root after `checkout scm`
                     test -f Caddyfile
                     test -f Caddyfile.prod
+                    test -f maintenance.html
+                    test -f assets/pog-logo.png
                     test -f docker/docker-compose.yml
                     test -d docker/signoz
                     # Component repos cloned by the Checkout stage above
@@ -328,16 +330,28 @@ pipeline {
                     # Production uses a tunnel-mode Caddyfile (HTTP-only on :80, no Let's Encrypt).
                     # NOTE: Infras_Devops content lives at the workspace root after `checkout scm`,
                     # so paths are NOT prefixed with Infras_Devops/.
-                    cp Caddyfile.prod   "${DEPLOY_PATH}/Caddyfile"
+                    # Caddy config DIR: Caddyfile + maintenance page + assets live together in
+                    # ${DEPLOY_PATH}/caddy and are bind-mounted as /etc/caddy (read-only).
+                    # The maintenance toggle is a flag file in the same dir (checked per-request,
+                    # no Caddy reload needed):
+                    #   ON : touch ${DEPLOY_PATH}/caddy/maintenance.on
+                    #   OFF: rm -f  ${DEPLOY_PATH}/caddy/maintenance.on
+                    # Deploys intentionally do NOT touch maintenance.on — maintenance state
+                    # survives redeploys until toggled off explicitly.
+                    mkdir -p "${DEPLOY_PATH}/caddy/assets"
+                    cp Caddyfile.prod      "${DEPLOY_PATH}/caddy/Caddyfile"
+                    cp maintenance.html    "${DEPLOY_PATH}/caddy/maintenance.html"
+                    cp assets/pog-logo.png "${DEPLOY_PATH}/caddy/assets/pog-logo.png"
+                    rm -f "${DEPLOY_PATH}/Caddyfile"   # legacy single-file location from older deploys
                     cp docker/docker-compose.yml "${DEPLOY_PATH}/docker-compose.yml"
                     cp -r docker/signoz/. "${DEPLOY_PATH}/docker/signoz/"
                     if [ -d docker/init-db ] && [ -n "$(ls -A docker/init-db 2>/dev/null)" ]; then
                       cp -r docker/init-db/. "${DEPLOY_PATH}/docker/init-db/"
                     fi
 
-                    # Bind mount Caddyfile on the server (no Docker Desktop fileshare cache there).
+                    # Bind mount the caddy config dir on the server (no Docker Desktop fileshare cache there).
                     # The source compose uses an external `pji_caddy_config` volume as a Docker Desktop workaround.
-                    sed -i 's|pji_caddy_config:/etc/caddy:ro|./Caddyfile:/etc/caddy/Caddyfile:ro|' "${DEPLOY_PATH}/docker-compose.yml"
+                    sed -i 's|pji_caddy_config:/etc/caddy:ro|./caddy:/etc/caddy:ro|' "${DEPLOY_PATH}/docker-compose.yml"
                     sed -i '/^  pji_caddy_config:$/,/^    external: true$/d' "${DEPLOY_PATH}/docker-compose.yml"
 
                     cd "${DEPLOY_PATH}"
@@ -380,12 +394,19 @@ pipeline {
                     done
                     # Retry the public-facing curl — Caddy may briefly 5xx right after startup
                     # before its first upstream probe completes.
+                    # When the maintenance flag is set, the expected answer is the 503
+                    # maintenance page instead of the 200 SPA.
                     success=0
                     for i in $(seq 1 12); do
-                      code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost/ || true)
+                      code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: 108pog.site' http://localhost/ || true)
                       if [ "$code" = "200" ] || [ "$code" = "304" ]; then
                         success=1
                         echo "Caddy returned $code after $i attempt(s)"
+                        break
+                      fi
+                      if [ "$code" = "503" ] && [ -f "${DEPLOY_PATH}/caddy/maintenance.on" ]; then
+                        success=1
+                        echo "Caddy returned 503 — expected, maintenance mode is ON"
                         break
                       fi
                       echo "[$i/12] caddy returned $code, retrying in 5s..."

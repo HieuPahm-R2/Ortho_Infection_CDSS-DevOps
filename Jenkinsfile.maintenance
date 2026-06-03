@@ -1,0 +1,65 @@
+// Tiny standalone pipeline to toggle the 108pog.site maintenance page in seconds,
+// without running the full build/deploy pipeline.
+//
+// Setup (one time): Jenkins → New Item → Pipeline → name it `maintenance-toggle`
+// → Pipeline from SCM → this repo → Script Path: Jenkinsfile.maintenance
+// (or paste this file inline as the pipeline script).
+//
+// How it works: the main pipeline bind-mounts ${DEPLOY_PATH}/caddy as /etc/caddy
+// inside the pji-caddy container. Caddy checks the `maintenance.on` flag file on
+// every request, so creating/removing it takes effect instantly — no reload, no
+// restart, no downtime. Subdomains (jenkins/signoz/minio.108pog.site) are never
+// affected; only the main 108pog.site host serves the maintenance page.
+pipeline {
+    agent any
+
+    parameters {
+        choice(name: 'ACTION', choices: ['status', 'on', 'off'],
+               description: 'on = show maintenance page on 108pog.site | off = back to normal | status = just report current state')
+        string(name: 'DEPLOY_PATH', defaultValue: '/opt/pji-advisor', trim: true,
+               description: 'Deploy directory on this host (same as the main pipeline)')
+    }
+
+    options {
+        timeout(time: 2, unit: 'MINUTES')
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+        timestamps()
+    }
+
+    stages {
+        stage('Toggle Maintenance') {
+            steps {
+                sh '''
+                    set -eu
+                    FLAG="${DEPLOY_PATH}/caddy/maintenance.on"
+                    test -d "${DEPLOY_PATH}/caddy" || { echo "${DEPLOY_PATH}/caddy missing — run the main deploy pipeline at least once first"; exit 1; }
+
+                    case "${ACTION}" in
+                      on)
+                        touch "$FLAG"
+                        echo ">>> Maintenance mode ENABLED"
+                        ;;
+                      off)
+                        rm -f "$FLAG"
+                        echo ">>> Maintenance mode DISABLED"
+                        ;;
+                      status)
+                        ;;
+                    esac
+
+                    if [ -f "$FLAG" ]; then
+                      echo "Current state: MAINTENANCE ON (flag file present)"
+                    else
+                      echo "Current state: maintenance off (no flag file)"
+                    fi
+
+                    # Verify what visitors actually get on the main host
+                    # (503 = maintenance page, 200/304 = normal app).
+                    code=$(curl -s -o /dev/null -w '%{http_code}' -H 'Host: 108pog.site' http://localhost/ || true)
+                    echo "https://108pog.site currently answers HTTP ${code}"
+                '''
+            }
+        }
+    }
+}

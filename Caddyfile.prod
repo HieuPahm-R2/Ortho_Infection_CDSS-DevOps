@@ -19,6 +19,45 @@
 :80 {
 	# Cloudflare always sends the right Host header; we accept any.
 
+	# --- Maintenance mode --------------------------------------------------
+	# Toggle by creating/removing the flag file `maintenance.on` in /etc/caddy.
+	# The `file` matcher is evaluated per-request, so NO reload/restart needed.
+	#   Production (Jenkins deploys ${DEPLOY_PATH}/caddy as /etc/caddy):
+	#     ON : touch /opt/pji-advisor/caddy/maintenance.on
+	#     OFF: rm -f  /opt/pji-advisor/caddy/maintenance.on
+	#     (or run the `maintenance-toggle` Jenkins job — see Jenkinsfile.maintenance)
+	#   Local (pji_caddy_config named volume):
+	#     ON : docker run --rm -v pji_caddy_config:/d alpine touch /d/maintenance.on
+	#     OFF: docker run --rm -v pji_caddy_config:/d alpine rm -f /d/maintenance.on
+	# Scoped to the main host only — signoz.108pog.site / minio.108pog.site
+	# have their own site blocks below, and jenkins.108pog.site is routed by
+	# cloudflared directly, so dev subdomains keep working during maintenance.
+	@maintenance {
+		host 108pog.site www.108pog.site
+		file {
+			root /etc/caddy
+			try_files maintenance.on
+		}
+	}
+	handle @maintenance {
+		root * /etc/caddy
+
+		# Static files the maintenance page itself needs (logo, ...) — served
+		# with a normal 200 so the browser renders them.
+		handle /assets/* {
+			file_server
+		}
+
+		handle {
+			header Cache-Control "no-store"
+			header Retry-After "1800"
+			rewrite * /maintenance.html
+			file_server {
+				status 503
+			}
+		}
+	}
+
 	header {
 		X-Content-Type-Options    "nosniff"
 		X-Frame-Options           "SAMEORIGIN"

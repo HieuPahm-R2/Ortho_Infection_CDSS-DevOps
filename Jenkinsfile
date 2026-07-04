@@ -236,15 +236,21 @@ pipeline {
                 stage('Frontend Image') {
                     steps {
                         dir("${env.FRONTEND_DIR}") {
-                            sh """
+                            sh '''
+                                set -eu
+                                if [ -f "${DEPLOY_PATH}/.env" ]; then
+                                  set -a
+                                  . "${DEPLOY_PATH}/.env"
+                                  set +a
+                                fi
                                 docker build \
                                   --build-arg VITE_BACKEND_URL=/ \
                                   --build-arg VITE_ACL_ENABLE=true \
-                                  --build-arg VITE_TURNSTILE_SITE_KEY=\${VITE_TURNSTILE_SITE_KEY:-} \
-                                  -t ${params.DOCKERHUB_REPO}/pji-frontend:${env.IMAGE_TAG} \
-                                  -t ${params.DOCKERHUB_REPO}/pji-frontend:latest \
+                                  --build-arg VITE_TURNSTILE_SITE_KEY="${VITE_TURNSTILE_SITE_KEY:-}" \
+                                  -t "${DOCKERHUB_REPO}/pji-frontend:${IMAGE_TAG}" \
+                                  -t "${DOCKERHUB_REPO}/pji-frontend:latest" \
                                   .
-                            """
+                            '''
                         }
                     }
                 }

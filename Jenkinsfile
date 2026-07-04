@@ -238,15 +238,14 @@ pipeline {
                         dir("${env.FRONTEND_DIR}") {
                             sh '''
                                 set -eu
+                                TURNSTILE_SITE_KEY=""
                                 if [ -f "${DEPLOY_PATH}/.env" ]; then
-                                  set -a
-                                  . "${DEPLOY_PATH}/.env"
-                                  set +a
+                                  TURNSTILE_SITE_KEY="$(awk -F= '/^VITE_TURNSTILE_SITE_KEY=/ {print substr($0, index($0, "=") + 1); found=1; exit} END {if (!found) print ""}' "${DEPLOY_PATH}/.env" | tr -d '\\r')"
                                 fi
                                 docker build \
                                   --build-arg VITE_BACKEND_URL=/ \
                                   --build-arg VITE_ACL_ENABLE=true \
-                                  --build-arg VITE_TURNSTILE_SITE_KEY="${VITE_TURNSTILE_SITE_KEY:-}" \
+                                  --build-arg VITE_TURNSTILE_SITE_KEY="${TURNSTILE_SITE_KEY}" \
                                   -t "${DOCKERHUB_REPO}/pji-frontend:${IMAGE_TAG}" \
                                   -t "${DOCKERHUB_REPO}/pji-frontend:latest" \
                                   .

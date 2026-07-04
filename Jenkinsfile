@@ -240,6 +240,7 @@ pipeline {
                                 docker build \
                                   --build-arg VITE_BACKEND_URL=/ \
                                   --build-arg VITE_ACL_ENABLE=true \
+                                  --build-arg VITE_TURNSTILE_SITE_KEY=\${VITE_TURNSTILE_SITE_KEY:-} \
                                   -t ${params.DOCKERHUB_REPO}/pji-frontend:${env.IMAGE_TAG} \
                                   -t ${params.DOCKERHUB_REPO}/pji-frontend:latest \
                                   .

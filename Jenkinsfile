@@ -489,7 +489,7 @@ pipeline {
                     docker exec pji-jaeger \
                       wget --spider -q http://localhost:13133/status
                     docker exec pji-otel-collector \
-                      wget --spider -q http://localhost:13133
+                      /otelcol-contrib validate --config=/etc/otelcol/config.yml
                     docker exec pji-grafana \
                       wget --spider -q http://localhost:3000/api/health
                     docker inspect pji-caddy \

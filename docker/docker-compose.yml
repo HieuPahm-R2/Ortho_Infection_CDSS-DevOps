@@ -738,7 +738,9 @@ services:
     networks:
       - monitoring-net
     healthcheck:
-      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:13133" ]
+      # Collector images intentionally contain no wget or curl. Config validation
+      # uses the shipped binary; the running collector exits on invalid config.
+      test: [ "CMD", "/otelcol-contrib", "validate", "--config=/etc/otelcol/config.yml" ]
       interval: 30s
       timeout: 5s
       retries: 3

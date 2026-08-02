@@ -477,7 +477,7 @@ pipeline {
                     docker exec pji-alertmanager \
                       wget --spider -q http://localhost:9093/-/ready
                     docker exec pji-loki \
-                      wget --spider -q http://localhost:3100/ready
+                      /usr/bin/loki -health
                     docker exec pji-docker-socket-proxy \
                       wget -qO- http://docker-socket-proxy:2375/_ping | grep -q OK
                     docker exec pji-docker-socket-proxy \

@@ -1,0 +1,82 @@
+groups:
+  - name: pji-availability
+    interval: 30s
+    rules:
+      - alert: PjiTargetDown
+        expr: up == 0
+        for: 2m
+        keep_firing_for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "PJI target {{ $labels.job }} is unavailable"
+          description: >-
+            {{ $labels.instance }} in job {{ $labels.job }} has failed every
+            Prometheus scrape for more than 2 minutes.
+
+      - alert: PjiPrometheusRuleEvaluationFailure
+        expr: increase(prometheus_rule_evaluation_failures_total[5m]) > 0
+        for: 5m
+        keep_firing_for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Prometheus rule evaluation is failing"
+          description: >-
+            Prometheus recorded {{ $value | humanize }} failed rule evaluations
+            during the last 5 minutes.
+
+  - name: pji-backend-baseline
+    interval: 30s
+    rules:
+      - alert: PjiBackendHighServerErrorRate
+        expr: >-
+          (
+            sum(rate(http_server_requests_seconds_count{
+              job="pji-backend",status=~"5.."
+            }[5m]))
+            /
+            clamp_min(
+              sum(rate(http_server_requests_seconds_count{
+                job="pji-backend"
+              }[5m])),
+              0.001
+            )
+          ) > 0.05
+        for: 10m
+        keep_firing_for: 5m
+        labels:
+          severity: critical
+          team: backend
+        annotations:
+          summary: "Backend 5xx rate is above 5%"
+          description: >-
+            The backend 5xx ratio has remained above 5% for 10 minutes.
+            Current ratio: {{ $value | humanizePercentage }}.
+
+      - alert: PjiBackendHighAverageLatency
+        expr: >-
+          (
+            sum(rate(http_server_requests_seconds_sum{
+              job="pji-backend"
+            }[5m]))
+            /
+            clamp_min(
+              sum(rate(http_server_requests_seconds_count{
+                job="pji-backend"
+              }[5m])),
+              0.001
+            )
+          ) > 2
+        for: 10m
+        keep_firing_for: 5m
+        labels:
+          severity: warning
+          team: backend
+        annotations:
+          summary: "Backend average latency is above 2 seconds"
+          description: >-
+            Backend mean request latency has remained above 2 seconds for
+            10 minutes. Current latency: {{ $value | humanizeDuration }}.

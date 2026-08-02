@@ -2,4 +2,10 @@
 .vscode
 CLAUDE.md
 .env
+.alertmanager-validation.*
+.secrets/
+secrets/
 .serena
+# Harness core maintenance binary
+scripts/bin/harness
+scripts/bin/harness.exe

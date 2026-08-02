@@ -16,8 +16,10 @@
 	}
 }
 
-:80 {
-	# Cloudflare always sends the right Host header; we accept any.
+http://108pog.site:80, http://www.108pog.site:80 {
+	# Only the production application hostnames are accepted. The Compose host
+	# port is loopback-only, so requests must arrive through the same-host
+	# Cloudflare Tunnel (or an explicitly trusted local operator).
 
 	# --- Maintenance mode --------------------------------------------------
 	# Toggle by creating/removing the flag file `maintenance.on` in /etc/caddy.
@@ -29,7 +31,7 @@
 	#   Local (pji_caddy_config named volume):
 	#     ON : docker run --rm -v pji_caddy_config:/d alpine touch /d/maintenance.on
 	#     OFF: docker run --rm -v pji_caddy_config:/d alpine rm -f /d/maintenance.on
-	# Scoped to the main host only — signoz.108pog.site / minio.108pog.site
+	# Scoped to the main host only — grafana.108pog.site / minio.108pog.site
 	# have their own site blocks below, and jenkins.108pog.site is routed by
 	# cloudflared directly, so dev subdomains keep working during maintenance.
 	@maintenance {
@@ -63,7 +65,7 @@
 		X-Frame-Options           "SAMEORIGIN"
 		X-XSS-Protection          "1; mode=block"
 		Referrer-Policy           "strict-origin-when-cross-origin"
-		Permissions-Policy        "camera=(), microphone=(), geolocation=()"
+		Permissions-Policy        "camera=(self), microphone=(), geolocation=()"
 
 		# Tell browsers we're served over HTTPS even though Caddy speaks HTTP
 		# (Cloudflare upgraded the request).
@@ -84,7 +86,7 @@
 	# so each event is forwarded the instant it arrives; read_timeout 0 stops
 	# Caddy cutting a stream that idles between events. (Cloudflare forwards SSE
 	# fine once the origin streams unbuffered with text/event-stream.)
-	@sse path /api/v1/ai-recommendations/runs/*/stream /api/v1/notifications/stream
+	@sse path /api/v1/ai-recommendations/runs/*/stream /api/v1/notifications/stream /api/v1/upload-sessions/*/events
 	handle @sse {
 		reverse_proxy pji-backend:8085 {
 			flush_interval -1
@@ -146,11 +148,10 @@
 	}
 }
 
-# SigNoz observability UI — Caddy proxies to the signoz-frontend container
-# (which binds 127.0.0.1:3301 only, not reachable from the LAN IP cloudflared uses).
-# Browsers see https://signoz.108pog.site (Cloudflare upgraded), Caddy receives HTTP.
-http://signoz.108pog.site:80 {
-	reverse_proxy signoz-frontend:3301 {
+# Grafana observability UI — Caddy proxies to the Grafana container.
+# Browsers see https://grafana.108pog.site (Cloudflare upgraded), Caddy receives HTTP.
+http://grafana.108pog.site:80 {
+	reverse_proxy grafana:3000 {
 		transport http {
 			dial_timeout            5s
 			response_header_timeout 60s
@@ -175,3 +176,7 @@ http://minio.108pog.site:80 {
 	}
 }
 
+# Reject requests which reach the origin with an undocumented Host header.
+:80 {
+	respond "Misdirected Request" 421
+}

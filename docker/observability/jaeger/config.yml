@@ -1,0 +1,76 @@
+service:
+  extensions:
+    - jaeger_storage
+    - jaeger_query
+    - remote_sampling
+    - healthcheckv2
+    - expvar
+    - zpages
+  pipelines:
+    traces:
+      receivers:
+        - otlp
+      processors:
+        - batch
+      exporters:
+        - jaeger_storage_exporter
+  telemetry:
+    resource:
+      service.name: jaeger
+    metrics:
+      level: detailed
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: "${env:JAEGER_LISTEN_HOST:-localhost}"
+                port: 8888
+    logs:
+      level: info
+
+extensions:
+  jaeger_query:
+    storage:
+      traces: badger_storage
+  jaeger_storage:
+    backends:
+      badger_storage:
+        badger:
+          directories:
+            keys: /badger/keys
+            values: /badger/values
+          ephemeral: false
+          ttl:
+            spans: 168h
+  remote_sampling:
+    file:
+      path:
+      default_sampling_probability: 0.1
+      reload_interval: 1s
+    http:
+      endpoint: "${env:JAEGER_LISTEN_HOST:-localhost}:5778"
+    grpc:
+      endpoint: "${env:JAEGER_LISTEN_HOST:-localhost}:5779"
+  healthcheckv2:
+    use_v2: true
+    http:
+      endpoint: "${env:JAEGER_LISTEN_HOST:-localhost}:13133"
+  expvar:
+    endpoint: "${env:JAEGER_LISTEN_HOST:-localhost}:27777"
+  zpages:
+    endpoint: "${env:JAEGER_LISTEN_HOST:-localhost}:27778"
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "${env:JAEGER_LISTEN_HOST:-localhost}:4317"
+      http:
+        endpoint: "${env:JAEGER_LISTEN_HOST:-localhost}:4318"
+
+processors:
+  batch:
+
+exporters:
+  jaeger_storage_exporter:
+    trace_storage: badger_storage

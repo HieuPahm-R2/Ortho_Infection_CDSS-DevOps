@@ -325,9 +325,9 @@
       ]
     }
   },
-  "====================": "Response mong muốn bên AI trả về ===================",
+  "====================": "AI trả về 3 phác đồ; DIAGNOSTIC_TEST do backend rule engine tạo ===================",
   "template_2_table": "ai_recommendation_items",
-  "template_2_description": "3 loại phác đồ: LOCAL_ANTIBIOTIC, SYSTEMIC_ANTIBIOTIC, SURGERY_PROCEDURE. Mỗi loại tương ứng 1 row trong bảng ai_recommendation_items với category enum tương ứng.",
+  "template_2_description": "AI trả về 3 loại phác đồ: LOCAL_ANTIBIOTIC, SYSTEMIC_ANTIBIOTIC, SURGERY_PROCEDURE. DIAGNOSTIC_TEST là 1 row do Java Spring backend tính bằng rule engine từ snapshot, không lấy từ AI.",
   "item_json_templates": {
     "LOCAL_ANTIBIOTIC": {
       "category": "LOCAL_ANTIBIOTIC",
@@ -479,7 +479,7 @@
     },
     "DIAGNOSTIC_TEST": {
       "category": "DIAGNOSTIC_TEST",
-      "title": "Chẩn đoán AI - Đánh giá nhiễm trùng khớp giả theo ICM 2018 Scoring",
+      "title": "Chẩn đoán hệ thống - Đánh giá nhiễm trùng khớp giả theo tiêu chí ICM",
       "scoring_system": {
         "name": "ICM 2018 PJI Diagnostic Criteria",
         "version": "2018 (Philadelphia Consensus)",

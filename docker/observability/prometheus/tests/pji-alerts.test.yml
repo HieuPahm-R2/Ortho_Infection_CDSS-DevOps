@@ -1,0 +1,60 @@
+rule_files:
+  - ../rules/pji-alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'up{job="pji-backend",instance="pji-backend:8085"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: PjiTargetDown
+        exp_alerts:
+          - exp_labels:
+              alertname: PjiTargetDown
+              instance: pji-backend:8085
+              job: pji-backend
+              severity: critical
+              team: platform
+            exp_annotations:
+              summary: "PJI target pji-backend is unavailable"
+              description: >-
+                pji-backend:8085 in job pji-backend has failed every Prometheus
+                scrape for more than 2 minutes.
+
+  - interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="pji-backend",status="200"}'
+        values: '0+94x20'
+      - series: 'http_server_requests_seconds_count{job="pji-backend",status="500"}'
+        values: '0+6x20'
+      - series: 'http_server_requests_seconds_sum{job="pji-backend",status="200"}'
+        values: '0+285x20'
+      - series: 'http_server_requests_seconds_sum{job="pji-backend",status="500"}'
+        values: '0+15x20'
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: PjiBackendHighServerErrorRate
+        exp_alerts:
+          - exp_labels:
+              alertname: PjiBackendHighServerErrorRate
+              severity: critical
+              team: backend
+            exp_annotations:
+              summary: "Backend 5xx rate is above 5%"
+              description: "The backend 5xx ratio has remained above 5% for 10 minutes. Current ratio: 6%."
+
+      - eval_time: 16m
+        alertname: PjiBackendHighAverageLatency
+        exp_alerts:
+          - exp_labels:
+              alertname: PjiBackendHighAverageLatency
+              severity: warning
+              team: backend
+            exp_annotations:
+              summary: "Backend average latency is above 2 seconds"
+              description: >-
+                Backend mean request latency has remained above 2 seconds for
+                10 minutes. Current latency: 3s.

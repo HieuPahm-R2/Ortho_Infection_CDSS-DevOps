@@ -96,7 +96,17 @@ pipeline {
                     test -f maintenance.html
                     test -f assets/pog-logo.png
                     test -f docker/docker-compose.yml
-                    test -d docker/signoz
+                    test -f docker/observability/alertmanager/alertmanager.yml
+                    test -f docker/observability/prometheus/prometheus.yml
+                    test -f docker/observability/prometheus/prometheus.local.yml
+                    test -f docker/observability/prometheus/rules/pji-alerts.yml
+                    test -f docker/observability/prometheus/tests/pji-alerts.test.yml
+                    test -f docker/observability/alloy/config.alloy
+                    test -f docker/observability/otel-collector/config.yml
+                    test -f docker/observability/jaeger/config.yml
+                    test -f docker/observability/grafana/provisioning/datasources/datasources.yml
+                    test -f docker/observability/grafana/provisioning/dashboards/provider.yml
+                    test -f docker/observability/grafana/provisioning/dashboards/json/production-overview.json
                     # Component repos cloned by the Checkout stage above
                     test -f "${BACKEND_DIR}/pom.xml"
                     test -f "${BACKEND_DIR}/Dockerfile"
@@ -107,6 +117,55 @@ pipeline {
                     test -f "${RAG_DIR}/Dockerfile"
                     test -f "${EXTRACT_DIR}/pyproject.toml"
                     test -f "${EXTRACT_DIR}/Dockerfile"
+                '''
+            }
+        }
+
+        stage('Validate Observability') {
+            steps {
+                sh '''
+                    set -eu
+                    root_dir="$(pwd)"
+                    discord_test_secret="$(mktemp "$root_dir/.alertmanager-validation.XXXXXX")"
+                    trap 'rm -f "$discord_test_secret"' EXIT
+                    printf '%s' 'https://discord.com/api/webhooks/validation/placeholder' > "$discord_test_secret"
+                    chmod 644 "$discord_test_secret"
+
+                    docker compose -f docker/docker-compose.yml config --no-interpolate --quiet
+                    docker compose -f docker-buildlocal.yml config --no-interpolate --quiet
+
+                    docker run --rm \
+                      -v "$root_dir/docker/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro" \
+                      -v "$root_dir/docker/observability/prometheus/rules:/etc/prometheus/rules:ro" \
+                      --entrypoint /bin/promtool \
+                      prom/prometheus:v3.13.1 \
+                      check config /etc/prometheus/prometheus.yml
+
+                    docker run --rm \
+                      -v "$root_dir/docker/observability/prometheus:/workspace:ro" \
+                      -w /workspace/tests \
+                      --entrypoint /bin/promtool \
+                      prom/prometheus:v3.13.1 \
+                      test rules pji-alerts.test.yml
+
+                    docker run --rm \
+                      -v "$root_dir/docker/observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro" \
+                      -v "$discord_test_secret:/run/secrets/discord_webhook_url:ro" \
+                      --entrypoint /bin/amtool \
+                      prom/alertmanager:v0.28.1 \
+                      check-config /etc/alertmanager/alertmanager.yml
+
+                    docker run --rm \
+                      -v "$root_dir/docker/observability/otel-collector/config.yml:/etc/otelcol/config.yml:ro" \
+                      otel/opentelemetry-collector-contrib:0.153.0 \
+                      validate --config=/etc/otelcol/config.yml
+
+                    docker run --rm \
+                      -v "$root_dir/Caddyfile.prod:/etc/caddy/Caddyfile:ro" \
+                      caddy:2-alpine \
+                      caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
+                    jq -e . docker/observability/grafana/provisioning/dashboards/json/production-overview.json >/dev/null
                 '''
             }
         }
@@ -330,7 +389,7 @@ pipeline {
                     test -d "${DEPLOY_PATH}" || { echo "DEPLOY_PATH ${DEPLOY_PATH} does not exist"; exit 1; }
                     test -f "${DEPLOY_PATH}/.env" || { echo "${DEPLOY_PATH}/.env is missing — create it manually before first deploy"; exit 1; }
 
-                    mkdir -p "${DEPLOY_PATH}/docker/signoz"
+                    mkdir -p "${DEPLOY_PATH}/docker/observability"
                     mkdir -p "${DEPLOY_PATH}/docker/init-db"
                     mkdir -p "${DEPLOY_PATH}/backups"   # postgres-backup-local writes here
                     # Production uses a tunnel-mode Caddyfile (HTTP-only on :80, no Let's Encrypt).
@@ -349,8 +408,9 @@ pipeline {
                     cp maintenance.html    "${DEPLOY_PATH}/caddy/maintenance.html"
                     cp assets/pog-logo.png "${DEPLOY_PATH}/caddy/assets/pog-logo.png"
                     rm -f "${DEPLOY_PATH}/Caddyfile"   # legacy single-file location from older deploys
+                    rm -rf "${DEPLOY_PATH}/docker/signoz" # legacy observability stack configs
                     cp docker/docker-compose.yml "${DEPLOY_PATH}/docker-compose.yml"
-                    cp -r docker/signoz/. "${DEPLOY_PATH}/docker/signoz/"
+                    cp -r docker/observability/. "${DEPLOY_PATH}/docker/observability/"
                     if [ -d docker/init-db ] && [ -n "$(ls -A docker/init-db 2>/dev/null)" ]; then
                       cp -r docker/init-db/. "${DEPLOY_PATH}/docker/init-db/"
                     fi
@@ -361,13 +421,21 @@ pipeline {
                     sed -i '/^  pji_caddy_config:$/,/^    external: true$/d' "${DEPLOY_PATH}/docker-compose.yml"
 
                     cd "${DEPLOY_PATH}"
+                    # Resolve the production .env and verify required secret files
+                    # before pulling or recreating any container.
+                    docker compose config --quiet
+                    # Caddy and the separately managed cloudflared container use
+                    # this external network for a private container-to-container
+                    # origin route (`http://caddy:80`).
+                    docker network inspect cloudflare-net >/dev/null 2>&1 || \
+                      docker network create --driver bridge cloudflare-net >/dev/null
                     # Pull only the images we build/push ourselves (the rest are public images
-                    # like postgres:16-alpine, redis:7-alpine, signoz/*, etc. — compose pulls
+                    # like postgres:16-alpine, redis:7-alpine, prometheus/loki/grafana/jaeger, etc. — compose pulls
                     # them automatically on first `up`).
                     DOCKERHUB_REPO="${DOCKERHUB_REPO}" IMAGE_TAG="${IMAGE_TAG}" \
                       docker compose pull pji-backend pji-frontend pji-rag-service pji-extract-api pji-extract-worker caddy
-                    # Bring up the full stack including SigNoz (zookeeper, clickhouse, otel-collector,
-                    # query-service, signoz-frontend, alertmanager, logspout).
+                    # Bring up the full stack including Prometheus, Alertmanager,
+                    # Loki, Grafana, Jaeger, Alloy, and the OTel collector.
                     DOCKERHUB_REPO="${DOCKERHUB_REPO}" IMAGE_TAG="${IMAGE_TAG}" \
                       docker compose up -d --remove-orphans
                 '''
@@ -381,7 +449,12 @@ pipeline {
             steps {
                 sh '''
                     set -eu
-                    for container in pji-backend pji-frontend pji-rag-service pji-caddy; do
+                    for container in \
+                      pji-backend pji-frontend pji-rag-service pji-caddy \
+                      pji-postgres-exporter pji-redis-exporter \
+                      pji-alertmanager pji-prometheus pji-loki \
+                      pji-docker-socket-proxy pji-alloy \
+                      pji-jaeger pji-otel-collector pji-grafana; do
                       tries=0
                       while [ "$tries" -lt 30 ]; do
                         status="$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container" 2>/dev/null || true)"
@@ -398,6 +471,35 @@ pipeline {
                         exit 1
                       fi
                     done
+
+                    docker exec pji-prometheus \
+                      wget --spider -q http://localhost:9090/-/ready
+                    docker exec pji-alertmanager \
+                      wget --spider -q http://localhost:9093/-/ready
+                    docker exec pji-loki \
+                      wget --spider -q http://localhost:3100/ready
+                    docker exec pji-docker-socket-proxy \
+                      wget -qO- http://docker-socket-proxy:2375/_ping | grep -q OK
+                    docker exec pji-docker-socket-proxy \
+                      wget -qO- http://docker-socket-proxy:2375/containers/json >/dev/null
+                    post_response="$(docker exec pji-docker-socket-proxy \
+                      wget -S -O /dev/null --post-data='' \
+                      http://docker-socket-proxy:2375/containers/json 2>&1 || true)"
+                    echo "$post_response" | grep -q '403 Forbidden'
+                    docker exec pji-jaeger \
+                      wget --spider -q http://localhost:13133/status
+                    docker exec pji-otel-collector \
+                      wget --spider -q http://localhost:13133
+                    docker exec pji-grafana \
+                      wget --spider -q http://localhost:3000/api/health
+                    docker inspect pji-caddy \
+                      --format '{{json .NetworkSettings.Networks}}' | grep -q '"cloudflare-net"'
+
+                    rules_json="$(docker exec pji-prometheus \
+                      wget -qO- http://localhost:9090/api/v1/rules)"
+                    echo "$rules_json" | grep -q '"name":"PjiTargetDown"'
+                    echo "$rules_json" | grep -q '"name":"PjiBackendHighServerErrorRate"'
+
                     # Retry the public-facing curl — Caddy may briefly 5xx right after startup
                     # before its first upstream probe completes.
                     # When the maintenance flag is set, the expected answer is the 503
@@ -421,6 +523,13 @@ pipeline {
                     if [ "$success" != "1" ]; then
                       echo "Caddy never returned 200 — last code: $code"
                       docker logs --tail 30 pji-caddy || true
+                      exit 1
+                    fi
+
+                    unknown_code="$(curl -s -o /dev/null -w '%{http_code}' \
+                      -H 'Host: origin.invalid' http://localhost/ || true)"
+                    if [ "$unknown_code" != "421" ]; then
+                      echo "Caddy accepted an unknown Host with status $unknown_code"
                       exit 1
                     fi
                 '''

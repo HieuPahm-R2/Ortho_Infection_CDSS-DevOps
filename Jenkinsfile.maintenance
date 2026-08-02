@@ -8,7 +8,7 @@
 // How it works: the main pipeline bind-mounts ${DEPLOY_PATH}/caddy as /etc/caddy
 // inside the pji-caddy container. Caddy checks the `maintenance.on` flag file on
 // every request, so creating/removing it takes effect instantly — no reload, no
-// restart, no downtime. Subdomains (jenkins/signoz/minio.108pog.site) are never
+// restart, no downtime. Subdomains (jenkins/grafana/minio.108pog.site) are never
 // affected; only the main 108pog.site host serves the maintenance page.
 pipeline {
     agent any

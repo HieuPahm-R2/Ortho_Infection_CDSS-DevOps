@@ -43,11 +43,12 @@ services:
     container_name: pji-minio
     restart: unless-stopped
     ports:
-      - "127.0.0.1:9000:9000"
+      - "${DEV_LAN_IP:-127.0.0.1}:9000:9000"
       - "127.0.0.1:9001:9001"
     environment:
       MINIO_ROOT_USER: admin
       MINIO_ROOT_PASSWORD: admin2026
+      MINIO_API_CORS_ALLOW_ORIGIN: ${LOCAL_MINIO_CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://${DEV_LAN_IP:-localhost}:5173}
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
@@ -74,6 +75,67 @@ services:
       timeout: 5s
       retries: 10
 
+  # =============================================================================
+  # BACKEND - Spring Boot
+  # =============================================================================
+  pji-backend:
+    build:
+      context: ../Backend_Server
+      dockerfile: Dockerfile
+    image: ${DOCKERHUB_REPO:-hieupahmet}/pji-backend:${IMAGE_TAG:-latest}
+    container_name: pji-backend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8085:8085"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgresql:5432/pji_dev
+      SPRING_DATASOURCE_USERNAME: user
+      SPRING_DATASOURCE_PASSWORD: 123456
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: admin
+      RABBITMQ_PASSWORD: admin2026
+      INTEGRATION_MINIO_URL: http://minio:9000
+      INTEGRATION_MINIO_PUBLIC_URL: ${INTEGRATION_MINIO_PUBLIC_URL:-http://${DEV_LAN_IP:-localhost}:9000}
+      INTEGRATION_MINIO_ACCESS_KEY: admin
+      INTEGRATION_MINIO_SECRET_KEY: admin2026
+      INTEGRATION_MINIO_PRESIGNED_EXPIRY_MINUTES: 60
+      MINIO_BUCKET: pji-documents
+      AI_SERVICE_URL: http://rag-service:8000
+      AI_SERVICE_API_KEY: ${AI_SERVICE_API_KEY:-dev-shared-key-pji-2026}
+      EXTRACT_IMAGES_URL: http://extract-api:8000
+      APP_CORS_ALLOWED_ORIGINS: ${LOCAL_APP_CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000,http://${DEV_LAN_IP:-localhost}:5173}
+      UPLOAD_SESSION_PUBLIC_WEB_URL: ${UPLOAD_SESSION_PUBLIC_WEB_URL:-http://${DEV_LAN_IP:-localhost}:5173}
+      COOKIE_SECURE: "false"
+      COOKIE_SAME_SITE: Lax
+      CAPTCHA_ENABLED: "false"
+      HEALTH_SHOW_DETAILS: always
+      HEALTH_MAIL_ENABLED: "false"
+      OTEL_TRACING_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_SERVICE_NAME: pji-backend
+      OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=local"
+      JAVA_OPTS: -Xms256m -Xmx768m -XX:+UseG1GC
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - pji-network
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8085/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 60s
+
   rag-service:
     build:
       context: ../Rag_Agentic
@@ -91,12 +153,16 @@ services:
       # Local redis runs without auth, so no password segment.
       REDIS_URL: redis://redis:6379/0
       CANCEL_KEY_PREFIX: "cancel:run:"
+      REQUIRE_API_KEY: "true"
+      API_KEYS: ${AI_SERVICE_API_KEY:-dev-shared-key-pji-2026}
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_SERVICE_NAME: rag-service
     depends_on:
       rabbitmq:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      pji-backend:
         condition: service_healthy
     networks:
       - pji-network
@@ -127,6 +193,7 @@ services:
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: admin
       RABBITMQ_PASSWORD: admin2026
+      RABBITMQ_QUEUE: ${EXTRACT_QUEUE:-image_processing}
       BASE_DIR: /app
       UPLOAD_DIR: /data/uploads
       OUTPUTS_DIR: /data/outputs
@@ -139,6 +206,12 @@ services:
         condition: service_healthy
     networks:
       - pji-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
 
   extract-worker:
     build:
@@ -155,6 +228,7 @@ services:
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: admin
       RABBITMQ_PASSWORD: admin2026
+      RABBITMQ_QUEUE: ${EXTRACT_QUEUE:-image_processing}
       BASE_DIR: /app
       UPLOAD_DIR: /data/uploads
       OUTPUTS_DIR: /data/outputs
@@ -169,6 +243,21 @@ services:
       - pji-network
 
   # =============================================================================
+  # METRICS EXPORTER - PostgreSQL
+  # =============================================================================
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: local-postgres-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: postgresql://user:123456@postgresql:5432/pji_dev?sslmode=disable
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    networks:
+      - pji-network
+
+  # =============================================================================
   # VOICE INTERACTION - Base + Gateway + Orchestrator
   # voice-base is a build-only image consumed by gateway/orchestrator Dockerfiles
   # via `FROM voice-base:latest`. It runs `true` and exits — no long-running process.
@@ -176,8 +265,164 @@ services:
 
 
   # =============================================================================
-  # OBSERVABILITY - SigNoz (replaces Prometheus / Loki / Grafana / Jaeger)
+  # OBSERVABILITY - Prometheus / Loki / Grafana / Jaeger
   # =============================================================================
+  prometheus:
+    image: prom/prometheus:v3.13.1
+    container_name: local-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+    volumes:
+      - ./docker/observability/prometheus/prometheus.local.yml:/etc/prometheus/prometheus.yml:ro
+      - ./docker/observability/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks:
+      - pji-network
+
+  loki:
+    image: grafana/loki:3.7.3
+    container_name: local-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/loki.yml
+    volumes:
+      - ./docker/observability/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki_data:/loki
+    ports:
+      - "127.0.0.1:3100:3100"
+    networks:
+      - pji-network
+
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:v0.4.2
+    container_name: local-docker-socket-proxy
+    restart: unless-stopped
+    environment:
+      CONTAINERS: "1"
+      INFO: "1"
+      NETWORKS: "1"
+      POST: "0"
+      LOG_LEVEL: warning
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    expose:
+      - "2375"
+    networks:
+      - docker-socket-net
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run
+      - /var/lib/haproxy
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: [ "CMD", "wget", "--spider", "-q", "http://localhost:2375/_ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  alloy:
+    image: grafana/alloy:v1.16.1
+    container_name: local-alloy
+    restart: unless-stopped
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./docker/observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - alloy_data:/var/lib/alloy/data
+    ports:
+      - "127.0.0.1:12345:12345"
+    depends_on:
+      loki:
+        condition: service_started
+      docker-socket-proxy:
+        condition: service_healthy
+    environment:
+      DEPLOYMENT_ENV: local
+    networks:
+      - pji-network
+      - docker-socket-net
+
+  jaeger-init:
+    image: busybox:1.37
+    container_name: local-jaeger-init
+    command: sh -c "mkdir -p /badger/keys /badger/values && chown -R 10001:10001 /badger"
+    user: "0:0"
+    volumes:
+      - jaeger_data:/badger
+    networks:
+      - pji-network
+
+  jaeger:
+    image: jaegertracing/jaeger:2.19.0
+    container_name: local-jaeger
+    restart: unless-stopped
+    command: [ "--config", "/etc/jaeger/config.yml" ]
+    user: "10001:10001"
+    environment:
+      JAEGER_LISTEN_HOST: 0.0.0.0
+    volumes:
+      - ./docker/observability/jaeger/config.yml:/etc/jaeger/config.yml:ro
+      - jaeger_data:/badger
+    depends_on:
+      jaeger-init:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:16686:16686"
+    networks:
+      - pji-network
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.153.0
+    container_name: local-otel-collector
+    restart: unless-stopped
+    command: [ "--config=/etc/otelcol/config.yml" ]
+    volumes:
+      - ./docker/observability/otel-collector/config.yml:/etc/otelcol/config.yml:ro
+    ports:
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+    depends_on:
+      - jaeger
+    networks:
+      - pji-network
+
+  grafana:
+    image: grafana/grafana:13.1.0
+    container_name: local-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: localadmin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_METRICS_ENABLED: "true"
+      GF_SERVER_ROOT_URL: http://localhost:3001
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "127.0.0.1:3001:3000"
+    depends_on:
+      - prometheus
+      - loki
+      - jaeger
+    networks:
+      - pji-network
 
 
 volumes:
@@ -186,17 +431,23 @@ volumes:
   minio_data:
   rabbitmq_data:
   extract_data:
-  # signoz_zookeeper_data:
-  # signoz_clickhouse_data:
-  # signoz_alertmanager_data:
-  # signoz_data:
+  prometheus_data:
+  loki_data:
+  alloy_data:
+  jaeger_data:
+  grafana_data:
 
 networks:
   pji-network:
     driver: bridge
+  docker-socket-net:
+    driver: bridge
+    internal: true
 
 ## Test tại local
 #   
-# SigNoz UI: http://localhost:3301
+# Grafana UI: http://localhost:3001
+# Jaeger UI: http://localhost:16686
+# Prometheus UI: http://localhost:9090
 # ======== docker compose -f docker-buildlocal.yml up -d --build 2>&1 | tail -200
 # npx gitnexus analyze --skip-git 2>&1 | tail -60

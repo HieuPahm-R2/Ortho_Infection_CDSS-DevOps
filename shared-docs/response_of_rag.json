@@ -102,14 +102,14 @@
     {
       "id": "item-90ef2069-d09d-4d6c-a239-9b1f432b5a52",
       "category": "DIAGNOSTIC_TEST",
-      "title": "Đánh giá chẩn đoán nhiễm trùng khớp giả",
+      "title": "Đánh giá chẩn đoán nhiễm trùng khớp nhân tạo",
       "item_json": {
         "scoring_system": {
           "name": "ICM 2018 PJI Diagnostic Criteria",
           "version": "2018 (Philadelphia Consensus)",
           "total_score": 6,
           "interpretation": "INFECTED",
-          "confidence_note": "Dựa trên các tiêu chí ICM 2018, bệnh nhân có dấu hiệu nhiễm trùng khớp giả"
+          "confidence_note": "Dựa trên các tiêu chí ICM 2018, bệnh nhân có dấu hiệu nhiễm trùng khớp nhân tạo"
         },
         "major_criteria": {
           "note": "Các tiêu chí chính",
@@ -159,7 +159,7 @@
           "total_minor_score_note": "Đáp ứng 3 tiêu chí phụ"
         },
         "ai_reasoning": {
-          "primary_diagnosis": "Nhiễm trùng khớp giả",
+          "primary_diagnosis": "Nhiễm trùng khớp nhân tạo",
           "infection_classification": "CHRONIC",
           "infection_classification_reasoning": "Bệnh nhân có triệu chứng kéo dài 2 tháng",
           "identified_organism": {
@@ -169,7 +169,7 @@
             "biofilm_forming": true,
             "virulence_note": "Có khả năng tạo màng sinh học"
           },
-          "reasoning_summary": "Bệnh nhân có các dấu hiệu và kết quả xét nghiệm phù hợp với nhiễm trùng khớp giả mãn tính do Staphylococcus aureus",
+          "reasoning_summary": "Bệnh nhân có các dấu hiệu và kết quả xét nghiệm phù hợp với nhiễm trùng khớp nhân tạo mãn tính do Staphylococcus aureus",
           "warnings": [
             {
               "type": "ALLERGY_ALERT",
@@ -186,7 +186,7 @@
       "title": "Phác đồ kháng sinh toàn thân",
       "item_json": {
         "regimen_name": "Vancomycin + Rifampicin",
-        "indication": "Nhiễm trùng khớp giả do Staphylococcus aureus",
+        "indication": "Nhiễm trùng khớp nhân tạo do Staphylococcus aureus",
         "total_duration_weeks": 6,
         "phases": [
           {
@@ -250,7 +250,7 @@
       "title": "Phác đồ phẫu thuật",
       "item_json": {
         "surgery_strategy_type": "TWO_STAGE_REVISION",
-        "strategy_rationale": "Bệnh nhân có nhiễm trùng khớp giả mãn tính",
+        "strategy_rationale": "Bệnh nhân có nhiễm trùng khớp nhân tạo mãn tính",
         "priority_level": "HIGH",
         "priority_note": "Cần phẫu thuật để loại bỏ nguồn nhiễm trùng",
         "stages": [
@@ -291,9 +291,9 @@
       "source_type": "GUIDELINE",
       "source_title": "ICM 2018 PJI Diagnostic Criteria",
       "source_uri": "https://www.icmmsociety.org/",
-      "snippet": "Tiêu chí chẩn đoán nhiễm trùng khớp giả của ICM 2018",
+      "snippet": "Tiêu chí chẩn đoán nhiễm trùng khớp nhân tạo của ICM 2018",
       "relevance_score": 0.95,
-      "cited_for": "Chẩn đoán nhiễm trùng khớp giả"
+      "cited_for": "Chẩn đoán nhiễm trùng khớp nhân tạo"
     },
     {
       "id": "cit-4dd25505-01fa-4b42-8079-62a2a31388e4",

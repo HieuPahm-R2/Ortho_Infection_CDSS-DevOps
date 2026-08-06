@@ -333,7 +333,7 @@
       "category": "LOCAL_ANTIBIOTIC",
       "title": "Phác đồ kháng sinh tại chỗ - Vancomycin + Tobramycin cement spacer",
       "regimen_name": "Antibiotic-loaded cement spacer (ALCS)",
-      "indication": "Nhiễm trùng khớp giả háng phải do MRSA - giai đoạn spacer sau tháo khớp giả",
+      "indication": "Nhiễm trùng khớp nhân tạo háng phải do MRSA - giai đoạn spacer sau tháo khớp giả",
       "duration_days": 42,
       "duration_note": "6 tuần với spacer xi măng kháng sinh, đánh giá lại trước khi tháo spacer",
       "delivery_info": {
@@ -377,7 +377,7 @@
       "category": "SYSTEMIC_ANTIBIOTIC",
       "title": "Phác đồ kháng sinh toàn thân - Vancomycin IV → Rifampicin + TMP-SMX uống",
       "regimen_name": "IV Vancomycin tấn công → Rifampicin + TMP-SMX duy trì uống",
-      "indication": "Nhiễm trùng khớp giả do MRSA (Staphylococcus aureus kháng Oxacillin). Phác đồ 2 giai đoạn theo IDSA guidelines.",
+      "indication": "Nhiễm trùng khớp nhân tạo do MRSA (Staphylococcus aureus kháng Oxacillin). Phác đồ 2 giai đoạn theo IDSA guidelines.",
       "total_duration_weeks": 12,
       "phases": [
         {
@@ -479,7 +479,7 @@
     },
     "DIAGNOSTIC_TEST": {
       "category": "DIAGNOSTIC_TEST",
-      "title": "Chẩn đoán hệ thống - Đánh giá nhiễm trùng khớp giả theo tiêu chí ICM",
+      "title": "Chẩn đoán hệ thống - Đánh giá nhiễm trùng khớp nhân tạo theo tiêu chí ICM",
       "scoring_system": {
         "name": "ICM 2018 PJI Diagnostic Criteria",
         "version": "2018 (Philadelphia Consensus)",
@@ -570,7 +570,7 @@
         "total_minor_score_note": "12/20 điểm minor khả dụng → vượt xa ngưỡng ≥6 (Infected)"
       },
       "ai_reasoning": {
-        "primary_diagnosis": "Nhiễm trùng khớp giả háng phải",
+        "primary_diagnosis": "Nhiễm trùng khớp nhân tạo háng phải",
         "infection_classification": "CHRONIC",
         "infection_classification_reasoning": "Triệu chứng > 4 tuần (onset 2 tháng), khớp giả lỏng lẻo (implant_stability = UNSTABLE), không có sự kiện hematogenous.",
         "identified_organism": {

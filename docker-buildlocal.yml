@@ -1,5 +1,3 @@
-
-
 services:
   postgresql:
     image: postgres:16.2
@@ -78,63 +76,63 @@ services:
   # =============================================================================
   # BACKEND - Spring Boot
   # =============================================================================
-  pji-backend:
-    build:
-      context: ../Backend_Server
-      dockerfile: Dockerfile
-    image: ${DOCKERHUB_REPO:-hieupahmet}/pji-backend:${IMAGE_TAG:-latest}
-    container_name: pji-backend
-    restart: unless-stopped
-    ports:
-      - "127.0.0.1:8085:8085"
-    environment:
-      SPRING_PROFILES_ACTIVE: dev
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgresql:5432/pji_dev
-      SPRING_DATASOURCE_USERNAME: user
-      SPRING_DATASOURCE_PASSWORD: 123456
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ""
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_PORT: 5672
-      RABBITMQ_USERNAME: admin
-      RABBITMQ_PASSWORD: admin2026
-      INTEGRATION_MINIO_URL: http://minio:9000
-      INTEGRATION_MINIO_PUBLIC_URL: ${INTEGRATION_MINIO_PUBLIC_URL:-http://${DEV_LAN_IP:-localhost}:9000}
-      INTEGRATION_MINIO_ACCESS_KEY: admin
-      INTEGRATION_MINIO_SECRET_KEY: admin2026
-      INTEGRATION_MINIO_PRESIGNED_EXPIRY_MINUTES: 60
-      MINIO_BUCKET: pji-documents
-      AI_SERVICE_URL: http://rag-service:8000
-      AI_SERVICE_API_KEY: ${AI_SERVICE_API_KEY:-dev-shared-key-pji-2026}
-      EXTRACT_IMAGES_URL: http://extract-api:8000
-      APP_CORS_ALLOWED_ORIGINS: ${LOCAL_APP_CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000,http://${DEV_LAN_IP:-localhost}:5173}
-      UPLOAD_SESSION_PUBLIC_WEB_URL: ${UPLOAD_SESSION_PUBLIC_WEB_URL:-http://${DEV_LAN_IP:-localhost}:5173}
-      COOKIE_SECURE: "false"
-      COOKIE_SAME_SITE: Lax
-      CAPTCHA_ENABLED: "false"
-      HEALTH_SHOW_DETAILS: always
-      HEALTH_MAIL_ENABLED: "false"
-      OTEL_TRACING_ENABLED: "true"
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
-      OTEL_SERVICE_NAME: pji-backend
-      OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=local"
-      JAVA_OPTS: -Xms256m -Xmx768m -XX:+UseG1GC
-    depends_on:
-      postgresql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
-    networks:
-      - pji-network
-    healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8085/actuator/health"]
-      interval: 15s
-      timeout: 10s
-      retries: 8
-      start_period: 60s
+  # pji-backend:
+  #   build:
+  #     context: ../Backend_Server
+  #     dockerfile: Dockerfile
+  #   image: ${DOCKERHUB_REPO:-hieupahmet}/pji-backend:${IMAGE_TAG:-latest}
+  #   container_name: pji-backend
+  #   restart: unless-stopped
+  #   ports:
+  #     - "127.0.0.1:8085:8085"
+  #   environment:
+  #     SPRING_PROFILES_ACTIVE: dev
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgresql:5432/pji_dev
+  #     SPRING_DATASOURCE_USERNAME: user
+  #     SPRING_DATASOURCE_PASSWORD: 123456
+  #     REDIS_HOST: redis
+  #     REDIS_PORT: 6379
+  #     REDIS_PASSWORD: ""
+  #     RABBITMQ_HOST: rabbitmq
+  #     RABBITMQ_PORT: 5672
+  #     RABBITMQ_USERNAME: admin
+  #     RABBITMQ_PASSWORD: admin2026
+  #     INTEGRATION_MINIO_URL: http://minio:9000
+  #     INTEGRATION_MINIO_PUBLIC_URL: ${INTEGRATION_MINIO_PUBLIC_URL:-http://${DEV_LAN_IP:-localhost}:9000}
+  #     INTEGRATION_MINIO_ACCESS_KEY: admin
+  #     INTEGRATION_MINIO_SECRET_KEY: admin2026
+  #     INTEGRATION_MINIO_PRESIGNED_EXPIRY_MINUTES: 60
+  #     MINIO_BUCKET: pji-documents
+  #     AI_SERVICE_URL: http://rag-service:8000
+  #     AI_SERVICE_API_KEY: ${AI_SERVICE_API_KEY:-dev-shared-key-pji-2026}
+  #     EXTRACT_IMAGES_URL: http://extract-api:8000
+  #     APP_CORS_ALLOWED_ORIGINS: ${LOCAL_APP_CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000,http://${DEV_LAN_IP:-localhost}:5173}
+  #     UPLOAD_SESSION_PUBLIC_WEB_URL: ${UPLOAD_SESSION_PUBLIC_WEB_URL:-http://${DEV_LAN_IP:-localhost}:5173}
+  #     COOKIE_SECURE: "false"
+  #     COOKIE_SAME_SITE: Lax
+  #     CAPTCHA_ENABLED: "false"
+  #     HEALTH_SHOW_DETAILS: always
+  #     HEALTH_MAIL_ENABLED: "false"
+  #     OTEL_TRACING_ENABLED: "true"
+  #     OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318/v1/traces
+  #     OTEL_SERVICE_NAME: pji-backend
+  #     OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=local"
+  #     JAVA_OPTS: -Xms256m -Xmx768m -XX:+UseG1GC
+  #   depends_on:
+  #     postgresql:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   networks:
+  #     - pji-network
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-sf", "http://localhost:8085/actuator/health"]
+  #     interval: 15s
+  #     timeout: 10s
+  #     retries: 8
+  #     start_period: 60s
 
   rag-service:
     build:
@@ -162,8 +160,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      pji-backend:
-        condition: service_healthy
+      # pji-backend:
+      #   condition: service_healthy
     networks:
       - pji-network
     healthcheck:

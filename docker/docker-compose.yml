@@ -94,6 +94,7 @@ services:
       INTEGRATION_MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?MinIO secret key required}
       INTEGRATION_MINIO_PRESIGNED_EXPIRY_MINUTES: ${INTEGRATION_MINIO_PRESIGNED_EXPIRY_MINUTES:-60}
       MINIO_BUCKET: ${MINIO_BUCKET:-pji-documents}
+      AVATAR_STORAGE_BUCKET: ${AVATAR_STORAGE_BUCKET:-user-avatars}
       UPLOAD_SESSION_PUBLIC_WEB_URL: ${UPLOAD_SESSION_PUBLIC_WEB_URL:?Public frontend URL required}
 
       # Internal AI service URL
@@ -183,8 +184,10 @@ services:
       ANALYTICAL_MODEL: ${ANALYTICAL_MODEL:-qwen/qwen-2.5-72b-instruct}
       OPINION_MODEL: ${OPINION_MODEL:-deepseek/deepseek-chat}
       CONTEXTUAL_MODEL: ${CONTEXTUAL_MODEL:-mistralai/mistral-large}
-      SYNTHESIS_MODEL: ${SYNTHESIS_MODEL:-openai/gpt-oss-120b}
+      SYNTHESIS_MODEL: ${SYNTHESIS_MODEL:-deepseek/deepseek-v4-pro-0813}
       SYNTHESIS_MODEL_TEMPERATURE: ${SYNTHESIS_MODEL_TEMPERATURE:-0.1}
+      THINKING_STREAM_ENABLED: ${THINKING_STREAM_ENABLED:-false}
+      SYNTHESIS_REASONING_ENABLED: ${SYNTHESIS_REASONING_ENABLED:-false}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-openai/text-embedding-3-small}
       RERANK_MODEL: ${RERANK_MODEL:-cohere/rerank-v3.5}
       RERANK_TOP_N: ${RERANK_TOP_N:-5}
@@ -381,8 +384,8 @@ services:
       - ./backups:/backups
     environment:
       POSTGRES_HOST: postgres
-      POSTGRES_DB: ${POSTGRES_DB:-pji_dev}
-      POSTGRES_USER: ${POSTGRES_USER:-user}
+      POSTGRES_DB: ${POSTGRES_DB:-pji_advisor}
+      POSTGRES_USER: ${POSTGRES_USER:-pji_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Postgres password required}
       POSTGRES_EXTRA_OPTS: "--no-owner --no-acl --quote-all-identifiers"
       SCHEDULE: "@daily" # runs at 04:00 UTC daily
@@ -404,7 +407,7 @@ services:
       redis-server
         --requirepass ${REDIS_PASSWORD:?Redis password required}
         --maxmemory 256mb
-        --maxmemory-policy allkeys-lru
+        --maxmemory-policy volatile-ttl
         --appendonly yes
         --appendfsync everysec
     volumes:

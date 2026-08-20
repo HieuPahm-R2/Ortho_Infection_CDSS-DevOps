@@ -103,6 +103,7 @@ services:
   #     INTEGRATION_MINIO_SECRET_KEY: admin2026
   #     INTEGRATION_MINIO_PRESIGNED_EXPIRY_MINUTES: 60
   #     MINIO_BUCKET: pji-documents
+  #     AVATAR_STORAGE_BUCKET: user-avatars
   #     AI_SERVICE_URL: http://rag-service:8000
   #     AI_SERVICE_API_KEY: ${AI_SERVICE_API_KEY:-dev-shared-key-pji-2026}
   #     EXTRACT_IMAGES_URL: http://extract-api:8000
@@ -170,7 +171,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-
   # =============================================================================
   # EXTRACT IMAGES - FastAPI extractor + RabbitMQ worker
   # =============================================================================
@@ -448,4 +448,5 @@ networks:
 # Jaeger UI: http://localhost:16686
 # Prometheus UI: http://localhost:9090
 # ======== docker compose -f docker-buildlocal.yml up -d --build 2>&1 | tail -200
+# docker compose -f docker-buildlocal.yml up -d --build --no-deps rag-service extract-api extract-worker
 # npx gitnexus analyze --skip-git 2>&1 | tail -60

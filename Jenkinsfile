@@ -390,7 +390,6 @@ pipeline {
                     test -f "${DEPLOY_PATH}/.env" || { echo "${DEPLOY_PATH}/.env is missing — create it manually before first deploy"; exit 1; }
 
                     mkdir -p "${DEPLOY_PATH}/docker/observability"
-                    mkdir -p "${DEPLOY_PATH}/docker/init-db"
                     mkdir -p "${DEPLOY_PATH}/backups"   # postgres-backup-local writes here
                     # Production uses a tunnel-mode Caddyfile (HTTP-only on :80, no Let's Encrypt).
                     # NOTE: Infras_Devops content lives at the workspace root after `checkout scm`,
@@ -409,11 +408,9 @@ pipeline {
                     cp assets/pog-logo.png "${DEPLOY_PATH}/caddy/assets/pog-logo.png"
                     rm -f "${DEPLOY_PATH}/Caddyfile"   # legacy single-file location from older deploys
                     rm -rf "${DEPLOY_PATH}/docker/signoz" # legacy observability stack configs
+                    rm -rf "${DEPLOY_PATH}/docker/init-db" # legacy init-db scripts (schema is owned by Flyway)
                     cp docker/docker-compose.yml "${DEPLOY_PATH}/docker-compose.yml"
                     cp -r docker/observability/. "${DEPLOY_PATH}/docker/observability/"
-                    if [ -d docker/init-db ] && [ -n "$(ls -A docker/init-db 2>/dev/null)" ]; then
-                      cp -r docker/init-db/. "${DEPLOY_PATH}/docker/init-db/"
-                    fi
 
                     # Bind mount the caddy config dir on the server (no Docker Desktop fileshare cache there).
                     # The source compose uses an external `pji_caddy_config` volume as a Docker Desktop workaround.

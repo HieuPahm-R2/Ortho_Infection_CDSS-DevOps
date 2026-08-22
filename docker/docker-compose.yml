@@ -272,6 +272,9 @@ services:
     expose:
       - "8000"
     environment:
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?OpenRouter API key required}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-google/gemini-1.5-pro}
+      OPENROUTER_PROVIDER_SORT: ${OPENROUTER_PROVIDER_SORT:-throughput}
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: ${RABBITMQ_USER:-pji_user}
@@ -313,6 +316,9 @@ services:
     restart: unless-stopped
     command: python -m extractor.worker.consumer
     environment:
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?OpenRouter API key required}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-google/gemini-1.5-pro}
+      OPENROUTER_PROVIDER_SORT: ${OPENROUTER_PROVIDER_SORT:-throughput}
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       RABBITMQ_USER: ${RABBITMQ_USER:-pji_user}

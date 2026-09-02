@@ -1,0 +1,92 @@
+discovery.docker "containers" {
+	// Podman exposes the Docker-compatible API through podman-socket-proxy.
+	host             = "http://podman-socket-proxy:2375"
+	refresh_interval = "10s"
+}
+
+discovery.relabel "containers" {
+	targets = discovery.docker.containers.targets
+
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "container"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_io_podman_compose_service"]
+		target_label  = "service_name"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_label_io_podman_compose_project"]
+		target_label  = "compose_project"
+	}
+}
+
+loki.source.docker "containers" {
+	host             = "http://podman-socket-proxy:2375"
+	targets          = discovery.docker.containers.targets
+	relabel_rules    = discovery.relabel.containers.rules
+	refresh_interval = "10s"
+	forward_to       = [loki.process.containers.receiver]
+}
+
+loki.process "containers" {
+	// Do not store arbitrary clinical payloads. These keys identify application
+	// records whose free-form values cannot be safely sanitized with regexes.
+	stage.drop {
+		expression          = "(?i)(assessment_json|clinical_record|patient_data|medical_history|reasoning_summary)"
+		drop_counter_reason = "sensitive_clinical_payload"
+	}
+
+	stage.drop {
+		longer_than         = "16KB"
+		drop_counter_reason = "oversized_payload"
+	}
+
+	// Mask common credential formats before a line reaches Loki.
+	stage.replace {
+		expression = "(?i)(?:authorization|password|passwd|secret|api[_-]?key|access[_-]?token|refresh[_-]?token|token)[=: ]+[\\\"']?([^\\s,\\\"'}]+)"
+		replace    = "[REDACTED_CREDENTIAL]"
+	}
+
+	stage.replace {
+		expression = "(?i)bearer\\s+([A-Za-z0-9._~+/-]+=*)"
+		replace    = "[REDACTED_BEARER]"
+	}
+
+	stage.replace {
+		expression = "(eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,})"
+		replace    = "[REDACTED_JWT]"
+	}
+
+	stage.replace {
+		expression = "(https://(?:discord(?:app)?\\.com)/api/webhooks/[^\\s\\\"']+)"
+		replace    = "[REDACTED_DISCORD_WEBHOOK]"
+	}
+
+	stage.replace {
+		expression = "://([^:/\\s]+):([^@/\\s]+)@"
+		replace    = "[REDACTED_URL_CREDENTIAL]"
+	}
+
+	stage.static_labels {
+		values = {
+			env   = sys.env("DEPLOYMENT_ENV"),
+			stack = "pji-advisor",
+		}
+	}
+
+	forward_to = [loki.write.default.receiver]
+}
+
+loki.write "default" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
+}
+
+livedebugging {
+	enabled = false
+}

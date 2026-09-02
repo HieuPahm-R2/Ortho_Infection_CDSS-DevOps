@@ -9,3 +9,5 @@ secrets/
 # Harness core maintenance binary
 scripts/bin/harness
 scripts/bin/harness.exe
+.codex
+.harness-upgrade-backup

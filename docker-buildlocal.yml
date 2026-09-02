@@ -296,9 +296,44 @@ services:
     networks:
       - pji-network
 
-  docker-socket-proxy:
+  # Docker-only socket proxy. Retained as a reference for Docker Engine users.
+  # docker-socket-proxy:
+  #   image: tecnativa/docker-socket-proxy:v0.4.2
+  #   container_name: local-docker-socket-proxy
+  #   restart: unless-stopped
+  #   environment:
+  #     CONTAINERS: "1"
+  #     INFO: "1"
+  #     NETWORKS: "1"
+  #     POST: "0"
+  #     LOG_LEVEL: warning
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock:ro
+  #   expose:
+  #     - "2375"
+  #   networks:
+  #     - docker-socket-net
+  #   read_only: true
+  #   tmpfs:
+  #     - /tmp
+  #     - /run
+  #     - /var/lib/haproxy
+  #   cap_drop:
+  #     - ALL
+  #   security_opt:
+  #     - no-new-privileges:true
+  #   healthcheck:
+  #     test: [ "CMD", "wget", "--spider", "-q", "http://localhost:2375/_ping" ]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #     start_period: 5s
+
+  # Podman serves a Docker-compatible API through its rootless socket. Override
+  # PODMAN_SOCKET only when `podman system connection list` reports another URI.
+  podman-socket-proxy:
     image: tecnativa/docker-socket-proxy:v0.4.2
-    container_name: local-docker-socket-proxy
+    container_name: local-podman-socket-proxy
     restart: unless-stopped
     environment:
       CONTAINERS: "1"
@@ -307,11 +342,11 @@ services:
       POST: "0"
       LOG_LEVEL: warning
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${PODMAN_SOCKET:-/run/user/1000/podman/podman.sock}:/var/run/docker.sock:ro
     expose:
       - "2375"
     networks:
-      - docker-socket-net
+      - podman-socket-net
     read_only: true
     tmpfs:
       - /tmp
@@ -338,20 +373,20 @@ services:
       - --storage.path=/var/lib/alloy/data
       - /etc/alloy/config.alloy
     volumes:
-      - ./docker/observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - ./docker/observability/alloy/config.podman.alloy:/etc/alloy/config.alloy:ro
       - alloy_data:/var/lib/alloy/data
     ports:
       - "127.0.0.1:12345:12345"
     depends_on:
       loki:
         condition: service_started
-      docker-socket-proxy:
+      podman-socket-proxy:
         condition: service_healthy
     environment:
       DEPLOYMENT_ENV: local
     networks:
       - pji-network
-      - docker-socket-net
+      - podman-socket-net
 
   jaeger-init:
     image: busybox:1.37
@@ -438,7 +473,11 @@ volumes:
 networks:
   pji-network:
     driver: bridge
-  docker-socket-net:
+  # Docker-only network, retained with the commented Docker socket proxy above.
+  # docker-socket-net:
+  #   driver: bridge
+  #   internal: true
+  podman-socket-net:
     driver: bridge
     internal: true
 
@@ -447,6 +486,7 @@ networks:
 # Grafana UI: http://localhost:3001
 # Jaeger UI: http://localhost:16686
 # Prometheus UI: http://localhost:9090
-# ======== docker compose -f docker-buildlocal.yml up -d --build 2>&1 | tail -200
-# docker compose -f docker-buildlocal.yml up -d --build --no-deps rag-service extract-api extract-worker
+# From the repository root: podman compose -f Infras_Devops/docker-buildlocal.yml up -d --build
+# From Infras_Devops: podman compose -f docker-buildlocal.yml up -d --build
+# podman compose -f docker-buildlocal.yml up -d --build --no-deps rag-service extract-api extract-worker
 # npx gitnexus analyze --skip-git 2>&1 | tail -60
